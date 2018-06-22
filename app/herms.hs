@@ -98,7 +98,7 @@ doEdit recp origRecp = do
         ingrs    = toStr ingredientName
         dirs     = unlines (directions recp)
         attrs    = toStr attribute
-        tag      = unlines (tags recp)
+        tag      = unwords (tags recp)
 
 edit :: String -> HermsReader IO ()
 edit target = do
