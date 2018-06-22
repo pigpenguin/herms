@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module ReadCookbook where
+module ReadCookbook (parseCookbook) where
 
 import           Control.Applicative ((<|>), liftA2)
 import           Data.Aeson ((.:),(.=),ToJSON(..),FromJSON(..))
@@ -17,7 +17,7 @@ parseCookbook = readNative <||> readJson
     (<||>) = liftA2 (<|>)
 
 readNative :: ByteString -> Maybe RecipeBook
-readNative = sequence . map readMaybe . lines . toString
+readNative = mapM readMaybe . lines . toString
   where
     toString = map (chr . fromIntegral) . unpack
 

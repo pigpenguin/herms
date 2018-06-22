@@ -2,11 +2,15 @@
 
 module Main where
 
+import ReadCookbook (parseCookbook)
+import qualified Data.ByteString.Lazy as B (readFile)
+
 import System.Directory
 import System.IO
 import Control.Monad
 import Control.Monad.IO.Class
 import Control.Monad.Reader
+
 import Data.Function
 import Data.List
 import Data.Maybe
@@ -40,8 +44,8 @@ type HermsReader = ReaderT (Config, RecipeBook)
 getRecipeBookWith :: Config -> IO [Recipe]
 getRecipeBookWith config = do
   fileName <- getDataFileName (recipesFile' config)
-  contents <- readFile fileName
-  return $ map read $ lines contents
+  contents <- B.readFile fileName
+  return $ fromJust $ parseCookbook contents
 
 getRecipe :: String -> [Recipe] -> Maybe Recipe
 getRecipe target = listToMaybe . filter ((target ==) . recipeName)
@@ -116,7 +120,7 @@ importFile :: String -> HermsReader IO ()
 importFile target = do
   (config, recipeBook) <- ask
   let t = translator config
-  otherRecipeBook <- liftIO $ map read . lines <$> readFile target
+  otherRecipeBook <- liftIO $ fromJust . parseCookbook <$> B.readFile target
   let recipeEq = (==) `on` recipeName
   let newRecipeBook = deleteFirstsBy recipeEq recipeBook otherRecipeBook
                         ++ otherRecipeBook
