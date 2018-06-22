@@ -3,21 +3,21 @@
 module Main where
 
 -- External Packages
-import Control.Exception
-import Control.Monad.Reader
+import           Control.Exception (catch, throw)
+import           Control.Monad.Reader (ReaderT(..), ask, forM, forM_, guard, liftIO, unless)
 import qualified Data.ByteString.Lazy as B (readFile)
-import Data.Function
-import Data.List
-import Data.Maybe
-import Data.Ratio
-import Data.Semigroup ((<>))
-import Foreign.C.Error
-import GHC.IO.Exception
+import           Data.Function (on)
+import           Data.List ((\\), deleteFirstsBy, groupBy, intercalate, sort, sortBy)
+import           Data.Maybe (catMaybes, fromJust, isNothing, listToMaybe)
+import           Data.Ratio ((%))
+import           Data.Semigroup ((<>))
+import           Foreign.C.Error (Errno(..), eXDEV)
+import           GHC.IO.Exception (ioe_errno)
 import qualified Lang.Strings as Str
-import Options.Applicative hiding (str)
-import System.Directory
-import System.IO
-import Text.Read ()
+import           Options.Applicative hiding (str) -- This does so many of the things
+import           System.Directory (copyFile, createDirectoryIfMissing, doesFileExist, removeFile, renameFile)
+import           System.IO (stdout, BufferMode(NoBuffering), openTempFile, hPutStr, hClose, hSetBuffering)
+import           Text.Read (readMaybe)
 
 
 -- Iternal Packages
@@ -28,7 +28,7 @@ import Types
 import UnitConversions
 import ReadConfig
 import Paths_herms
-import ReadCookbook (parseCookbook)
+import ReadCookbook
 
 -- Global constants
 versionStr :: String
@@ -40,13 +40,13 @@ configPath = getDataFileName "config.hs"
 type HermsReader = ReaderT (Config, RecipeBook)
 
 -- | @getRecipeBookWith reads in recipe book with already read-in config
-getRecipeBookWith :: Config -> IO [Recipe]
+getRecipeBookWith :: Config -> IO RecipeBook
 getRecipeBookWith config = do
   fileName <- getDataFileName (recipesFile' config)
   contents <- B.readFile fileName
   return $ fromJust $ parseCookbook contents
 
-getRecipe :: String -> [Recipe] -> Maybe Recipe
+getRecipe :: String -> RecipeBook -> Maybe Recipe
 getRecipe target = listToMaybe . filter ((target ==) . recipeName)
 
 saveOrDiscard :: [[String]]   -- input for the new recipe
@@ -110,7 +110,7 @@ edit target = do
 -- | `readRecipeRef target book` interprets the string `target`
 --   as either an index or a recipe's name and looks up the
 --   corresponding recipe in the `book`
-readRecipeRef :: String -> [Recipe] -> Maybe Recipe
+readRecipeRef :: String -> RecipeBook -> Maybe Recipe
 readRecipeRef target recipeBook =
   (safeLookup recipeBook . pred =<< readMaybe target)
   <|> getRecipe target recipeBook
