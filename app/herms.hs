@@ -5,7 +5,7 @@ module Main where
 -- External Packages
 import           Control.Exception (catch, throw)
 import           Control.Monad.Reader (ReaderT(..), ask, forM, forM_, guard, liftIO, unless)
-import qualified Data.ByteString.Lazy as B (readFile)
+import qualified Data.ByteString.Lazy as B (readFile, hPutStr)
 import           Data.Function (on)
 import           Data.List ((\\), deleteFirstsBy, groupBy, intercalate, sort, sortBy)
 import           Data.Maybe (catMaybes, fromJust, isNothing, listToMaybe)
@@ -13,7 +13,6 @@ import           Data.Ratio ((%))
 import           Data.Semigroup ((<>))
 import           Foreign.C.Error (Errno(..), eXDEV)
 import           GHC.IO.Exception (ioe_errno)
-import qualified Lang.Strings as Str
 import           Options.Applicative hiding (str) -- This does so many of the things
 import           System.Directory (copyFile, createDirectoryIfMissing, doesFileExist, removeFile, renameFile)
 import           System.IO (stdout, BufferMode(NoBuffering), openTempFile, hPutStr, hClose, hSetBuffering)
@@ -21,14 +20,15 @@ import           Text.Read (readMaybe)
 
 
 -- Iternal Packages
-import Utils
-import AddCLI
-import RichText
-import Types
-import UnitConversions
-import ReadConfig
-import Paths_herms
-import ReadCookbook
+import           AddCLI
+import qualified Lang.Strings as Str
+import           Paths_herms
+import           ReadConfig
+import           ReadCookbook
+import           RichText
+import           Types
+import           UnitConversions
+import           Utils
 
 -- Global constants
 versionStr :: String
@@ -49,6 +49,7 @@ getRecipeBookWith config = do
 getRecipe :: String -> RecipeBook -> Maybe Recipe
 getRecipe target = listToMaybe . filter ((target ==) . recipeName)
 
+-- TODO this writes stuff
 saveOrDiscard :: [[String]]   -- input for the new recipe
               -> Maybe Recipe -- maybe an original recipe prior to any editing
               -> HermsReader IO ()
@@ -64,7 +65,8 @@ saveOrDiscard input oldRecp = do
     let recpName = maybe (recipeName newRecipe) recipeName oldRecp
     unless (isNothing (readRecipeRef recpName recipeBook)) $ removeSilent [recpName]
     fileName <- liftIO $ getDataFileName (recipesFile' config)
-    liftIO $ appendFile fileName (show newRecipe ++ "\n")
+    let newRecipeBook = recipeBook ++ [newRecipe]
+    liftIO $ replaceDataFile (recipesFile' config) newRecipeBook
     liftIO $ putStrLn (t Str.recipeSaved)
   else if response == (t Str.n) || response == (t Str.nCap)
     then
@@ -79,13 +81,13 @@ saveOrDiscard input oldRecp = do
 
 add :: HermsReader IO ()
 add = do
-  (config, recipeBook) <- ask
+  (config, _) <- ask
   input <- liftIO $ getAddInput (translator config)
   saveOrDiscard input Nothing
 
 doEdit :: Recipe -> Maybe Recipe -> HermsReader IO ()
 doEdit recp origRecp = do
-  (config, recipeBook) <- ask
+  (config, _) <- ask
   input <- liftIO $ getEdit (translator config) (recipeName recp) (description recp) serving amounts units ingrs attrs dirs tag
   saveOrDiscard input origRecp
   where serving  = show $ servingSize recp
@@ -123,7 +125,7 @@ importFile target = do
   let recipeEq = (==) `on` recipeName
   let newRecipeBook = deleteFirstsBy recipeEq recipeBook otherRecipeBook
                         ++ otherRecipeBook
-  liftIO $ replaceDataFile (recipesFile' config) $ unlines $ show <$> newRecipeBook
+  liftIO $ replaceDataFile (recipesFile' config) newRecipeBook
   liftIO $ if null otherRecipeBook
   then putStrLn (t Str.nothingToImport)
   else do
@@ -166,7 +168,7 @@ viewByStep targets serv convName = do
 
 viewRecipeByStep :: Recipe -> Maybe Int -> HermsReader IO ()
 viewRecipeByStep recp servings = do
-  (config, recipeBook) <- ask
+  (config, _) <- ask
   let t = translator config
   liftIO $ putText $ showRecipeHeader t recp servings
   let steps = showRecipeSteps recp
@@ -175,13 +177,14 @@ viewRecipeByStep recp servings = do
     getLine
   liftIO $ putStr $ last steps ++ "\n"
 
+
 list :: [String] -> Bool -> Bool -> HermsReader IO ()
 list inputTags groupByTags nameOnly = do
-  (config,recipes) <- ask
+  (_,recipes) <- ask
   let recipesWithIndex = zip [1..] recipes
   let targetRecipes    = filterByTags inputTags recipesWithIndex
   if groupByTags
-  then listByTags nameOnly inputTags targetRecipes
+  then listByTags nameOnly targetRecipes
   else listDefault nameOnly targetRecipes
 
 filterByTags :: [String] -> [(Int, Recipe)] -> [(Int, Recipe)]
@@ -192,7 +195,7 @@ filterByTags inputTags = filter (inTags . tags . snd)
 
 listDefault :: Bool -> [(Int, Recipe)] -> HermsReader IO ()
 listDefault nameOnly (unzip -> (indices, recipes)) = do
-  (config, recipeBook) <- ask
+  (config, _) <- ask
   let recipeList = map (showRecipeInfo (translator config)) recipes
       size       = length $ show $ length recipeList
       strIndices = map (padLeft size . show) indices
@@ -200,9 +203,9 @@ listDefault nameOnly (unzip -> (indices, recipes)) = do
   then mapM_ (putStrLn . recipeName) recipes
   else mapM_ putTextLn $ zipWith (\ i -> ((i ~~ ". ") ~~)) strIndices recipeList
 
-listByTags :: Bool -> [String] -> [(Int, Recipe)] -> HermsReader IO ()
-listByTags nameOnly inputTags recipesWithIdx = do
-  (config, recipeBook) <- ask
+listByTags :: Bool -> [(Int, Recipe)] -> HermsReader IO ()
+listByTags nameOnly recipesWithIdx = do
+  (config, _) <- ask
   let tagsRecipes :: [[(String, (Int, Recipe))]]
       tagsRecipes =
         groupBy ((==) `on` fst) $ sortBy (compare `on` fst) $
@@ -232,15 +235,15 @@ takeFullWords = unwords . takeFullWords' 0 . words
                                 | otherwise           =
                                   x : takeFullWords' (length x + n) xs
 
--- | @replaceDataFile fp str@ replaces the target data file @fp@ with
---   the new content @str@ in a safe manner: it opens a temporary file
+-- | @replaceDataFile fp recipeBook@ replaces the target data file @fp@ with
+--   the new content @recipeBook@ in a safe manner: it opens a temporary file
 --   first, writes to it, closes the handle, removes the target,
 --   and finally moves the temporary file over to the target @fp@.
 
-replaceDataFile :: FilePath -> String -> IO ()
-replaceDataFile fp str = do
+replaceDataFile :: FilePath -> RecipeBook -> IO ()
+replaceDataFile fp recipeBook = do
   (tempName, tempHandle) <- openTempFile "." "herms_temp"
-  hPutStr tempHandle str
+  B.hPutStr tempHandle $ showJson recipeBook
   hClose tempHandle
   fileName <- getDataFileName fp
   removeFile fileName
@@ -269,7 +272,7 @@ removeWithVerbosity v targets = do
     return mrecp
   -- Remove all the resolved recipes at once
   let newRecipeBook = recipeBook \\ catMaybes mrecipes
-  liftIO $ replaceDataFile (recipesFile' config) $ unlines $ show <$> newRecipeBook
+  liftIO $ replaceDataFile (recipesFile' config) newRecipeBook
 
 remove :: [String] -> HermsReader IO ()
 remove = removeWithVerbosity True
@@ -279,7 +282,7 @@ removeSilent = removeWithVerbosity False
 
 shop :: [String] -> Int -> HermsReader IO ()
 shop targets serv = do
-  (config, recipeBook) <- ask
+  (_, recipeBook) <- ask
   let getFactor recp
         | serv == 0 = servingSize recp % 1
         | otherwise = serv % 1
@@ -343,7 +346,7 @@ data Command = List   [String] Bool Bool         -- ^ shows recipes
              | Shop   [String] Int               -- ^ generates the shopping list for given recipes
              | DataDir                           -- ^ prints the directory of recipe file and config.hs
 
-listP, addP, viewP, editP, importP, shopP, dataDirP :: Translator -> Parser Command
+addP, dataDirP, editP, importP, listP, removeP, shopP, viewP :: Translator -> Parser Command
 listP    t = List   <$> (words <$> (tagsP t)) <*> (groupByTagsP t) <*> (nameOnlyP t)
 addP     _ = pure Add
 editP    t = Edit   <$> (recipeNameP t)

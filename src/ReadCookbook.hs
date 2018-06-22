@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module ReadCookbook (parseCookbook) where
+module ReadCookbook (parseCookbook, showJson) where
 
 import           Control.Applicative ((<|>), liftA2)
 import           Data.Aeson ((.:),(.=),ToJSON(..),FromJSON(..))
