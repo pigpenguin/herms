@@ -2,23 +2,25 @@
 
 module Main where
 
-import ReadCookbook (parseCookbook)
-import qualified Data.ByteString.Lazy as B (readFile)
-
-import System.Directory
-import System.IO
-import Control.Monad
-import Control.Monad.IO.Class
+-- External Packages
+import Control.Exception
 import Control.Monad.Reader
-
+import qualified Data.ByteString.Lazy as B (readFile)
 import Data.Function
 import Data.List
 import Data.Maybe
-import Data.Semigroup ((<>))
 import Data.Ratio
-import Control.Applicative
+import Data.Semigroup ((<>))
+import Foreign.C.Error
+import GHC.IO.Exception
+import qualified Lang.Strings as Str
 import Options.Applicative hiding (str)
-import Text.Read
+import System.Directory
+import System.IO
+import Text.Read ()
+
+
+-- Iternal Packages
 import Utils
 import AddCLI
 import RichText
@@ -26,10 +28,7 @@ import Types
 import UnitConversions
 import ReadConfig
 import Paths_herms
-import Control.Exception
-import GHC.IO.Exception
-import Foreign.C.Error
-import qualified Lang.Strings as Str
+import ReadCookbook (parseCookbook)
 
 -- Global constants
 versionStr :: String
@@ -79,7 +78,7 @@ saveOrDiscard input oldRecp = do
     saveOrDiscard input oldRecp
 
 add :: HermsReader IO ()
-add = do 
+add = do
   (config, recipeBook) <- ask
   input <- liftIO $ getAddInput (translator config)
   saveOrDiscard input Nothing
@@ -323,9 +322,9 @@ runWithOpts Add                                     = add
 runWithOpts (Edit target)                           = edit target
 runWithOpts (Import target)                         = importFile target
 runWithOpts (Remove targets)                        = remove targets
-runWithOpts (View targets serving step conversion)  = if step 
+runWithOpts (View targets serving step conversion)  = if step
                                                       then viewByStep targets serving conversion
-                                                      else view targets serving conversion 
+                                                      else view targets serving conversion
 runWithOpts (Shop targets serving)                  = shop targets serving
 runWithOpts DataDir                                 = printDataDir
 
