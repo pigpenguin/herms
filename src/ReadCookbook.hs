@@ -48,6 +48,7 @@ keys = [ "recipeName"
        , "attribute"
        ]
 
+-- Dictates visual style of pretty printed json
 displayConfig :: Aeson.Config
 displayConfig = Aeson.Config { Aeson.confIndent = Aeson.Spaces 2
                              , Aeson.confCompare = Aeson.keyOrder keys
