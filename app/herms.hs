@@ -3,20 +3,47 @@
 module Main where
 
 -- External Packages
-import           Control.Exception (catch, throw)
-import           Control.Monad.Reader (ReaderT(..), ask, forM, forM_, guard, liftIO, unless)
+import Control.Exception (catch, throw)
+import Control.Monad.Reader
+  ( ReaderT(..)
+  , ask
+  , forM
+  , forM_
+  , guard
+  , liftIO
+  , unless
+  )
 import qualified Data.ByteString.Lazy as B (readFile, hPutStr)
 import           Data.Function (on)
-import           Data.List ((\\), deleteFirstsBy, groupBy, intercalate, sort, sortBy)
-import           Data.Maybe (catMaybes, fromJust, isJust, listToMaybe)
-import           Data.Ratio ((%))
-import           Data.Semigroup ((<>))
-import           Foreign.C.Error (Errno(..), eXDEV)
-import           GHC.IO.Exception (ioe_errno)
-import           Options.Applicative hiding (str) -- This does so many of the things
-import           System.Directory (copyFile, createDirectoryIfMissing, doesFileExist, removeFile, renameFile)
-import           System.IO (stdout, BufferMode(NoBuffering), openTempFile, hPutStr, hClose, hSetBuffering)
-import           Text.Read (readMaybe)
+import           Data.List
+  ( (\\)
+  , deleteFirstsBy
+  , groupBy
+  , intercalate
+  , sort
+  , sortBy
+  )
+import Data.Maybe (catMaybes, fromJust, listToMaybe)
+import Data.Ratio ((%))
+import Data.Semigroup ((<>))
+import Foreign.C.Error (Errno(..), eXDEV)
+import GHC.IO.Exception (ioe_errno)
+import Options.Applicative hiding (str)
+import System.Directory
+  ( copyFile
+  , createDirectoryIfMissing
+  , doesFileExist
+  , removeFile
+  , renameFile
+  )
+import System.IO
+  ( BufferMode(NoBuffering)
+  , hClose
+  , hSetBuffering
+  , openTempFile
+  , stdout
+  )
+import Text.Read (readMaybe)
 
 
 -- Iternal Packages
@@ -54,7 +81,6 @@ removeRecipe target = filter predicate
   where
     predicate = (/= target) . recipeName
 
--- TODO this writes stuff
 saveOrDiscard :: [[String]]   -- input for the new recipe
               -> Maybe Recipe -- maybe an original recipe prior to any editing
               -> HermsReader IO ()
@@ -68,11 +94,7 @@ saveOrDiscard input oldRecp = do
   if response == (t Str.y) || response == (t Str.yCap)
     then do
     let recpName = maybe (recipeName newRecipe) recipeName oldRecp
-    let recipeBook' = if (isJust (readRecipeRef recpName recipeBook))
-                      then removeRecipe recpName recipeBook
-                      else recipeBook
-    fileName <- liftIO $ getDataFileName (recipesFile' config)
-    let newRecipeBook = recipeBook' ++ [newRecipe]
+    let newRecipeBook = (removeRecipe recpName recipeBook) ++ [newRecipe]
     liftIO $ replaceDataFile (recipesFile' config) newRecipeBook
     liftIO $ putStrLn (t Str.recipeSaved)
   else if response == (t Str.n) || response == (t Str.nCap)
@@ -139,6 +161,7 @@ importFile target = do
     putStrLn (t Str.importedRecipes)
     forM_ otherRecipeBook $ \recipe ->
       putStrLn $ "  " ++ recipeName recipe
+
 
 getServingsAndConv :: Int -> String -> Config -> (Maybe Int, Conversion)
 getServingsAndConv serv convName config = (servings, conv)
@@ -284,6 +307,8 @@ removeWithVerbosity v targets = do
 remove :: [String] -> HermsReader IO ()
 remove = removeWithVerbosity True
 
+-- This function is currently unused, this also means removeWithVerbosity
+-- is needlessly general and could be replace simply with remove
 removeSilent :: [String] -> HermsReader IO ()
 removeSilent = removeWithVerbosity False
 
