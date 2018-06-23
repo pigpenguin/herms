@@ -8,7 +8,7 @@ import           Control.Monad.Reader (ReaderT(..), ask, forM, forM_, guard, lif
 import qualified Data.ByteString.Lazy as B (readFile, hPutStr)
 import           Data.Function (on)
 import           Data.List ((\\), deleteFirstsBy, groupBy, intercalate, sort, sortBy)
-import           Data.Maybe (catMaybes, fromJust, isNothing, listToMaybe)
+import           Data.Maybe (catMaybes, fromJust, isJust, listToMaybe)
 import           Data.Ratio ((%))
 import           Data.Semigroup ((<>))
 import           Foreign.C.Error (Errno(..), eXDEV)
@@ -49,6 +49,11 @@ getRecipeBookWith config = do
 getRecipe :: String -> RecipeBook -> Maybe Recipe
 getRecipe target = listToMaybe . filter ((target ==) . recipeName)
 
+removeRecipe :: String -> RecipeBook -> RecipeBook
+removeRecipe target = filter predicate
+  where
+    predicate = (/= target) . recipeName
+
 -- TODO this writes stuff
 saveOrDiscard :: [[String]]   -- input for the new recipe
               -> Maybe Recipe -- maybe an original recipe prior to any editing
@@ -63,9 +68,11 @@ saveOrDiscard input oldRecp = do
   if response == (t Str.y) || response == (t Str.yCap)
     then do
     let recpName = maybe (recipeName newRecipe) recipeName oldRecp
-    unless (isNothing (readRecipeRef recpName recipeBook)) $ removeSilent [recpName]
+    let recipeBook' = if (isJust (readRecipeRef recpName recipeBook))
+                      then removeRecipe recpName recipeBook
+                      else recipeBook
     fileName <- liftIO $ getDataFileName (recipesFile' config)
-    let newRecipeBook = recipeBook ++ [newRecipe]
+    let newRecipeBook = recipeBook' ++ [newRecipe]
     liftIO $ replaceDataFile (recipesFile' config) newRecipeBook
     liftIO $ putStrLn (t Str.recipeSaved)
   else if response == (t Str.n) || response == (t Str.nCap)

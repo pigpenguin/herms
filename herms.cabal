@@ -85,6 +85,7 @@ executable herms
   -- Other library packages from which modules are imported.
   build-depends:       ansi-terminal >= 0.7.0 && <= 0.8.1
                      , aeson
+                     , aeson-pretty
                      , base >=4.8 && <5
                      , brick >= 0.19 && < 0.38
                      , bytestring >= 0.10

@@ -4,6 +4,7 @@ module ReadCookbook (parseCookbook, showJson) where
 import           Control.Applicative ((<|>), liftA2)
 import           Data.Aeson ((.:),(.=),ToJSON(..),FromJSON(..))
 import qualified Data.Aeson as Aeson (decode, encode, object, withObject)
+import qualified Data.Aeson.Encode.Pretty as Aeson (encodePretty)
 import           Data.ByteString.Lazy (ByteString, unpack)
 import           Data.Char (chr)
 import           Text.Read (readMaybe)
@@ -25,7 +26,7 @@ readJson :: ByteString -> Maybe RecipeBook
 readJson = Aeson.decode
 
 showJson :: RecipeBook -> ByteString
-showJson = Aeson.encode
+showJson = Aeson.encodePretty
 
 -- JSON parsing instances for Ingredient
 
